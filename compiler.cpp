@@ -6,16 +6,17 @@
 
 using namespace std;
 
-// Token types
+// Tokens
 enum TokenType {
-    VAR,      // Variable assignment (c, o, d, e)
-    IF,       // "cod" (if statement)
-    COMPARE,  // "od" (greater than)
-    PRINT,    // "codecode" (print)
-    BOOL_TRUE,  // "co" (true)
-    BOOL_FALSE, // "de" (false)
-    NUMBER,   // Integer numbers
-    END       // End of statement
+    IDENT,
+    NUMBER,
+    OPERATOR,
+    PRINT,
+    END
+};
+
+vector<string> TokenTypeString{
+    "Identifier","Number","Operator","Print","End"
 };
 
 struct Token {
@@ -24,23 +25,30 @@ struct Token {
 };
 
 unordered_map<string, TokenType> keywords = {
-    {"t", VAR}, {"o", VAR}, {"b", VAR}, {"y", VAR},
-    {"tob", IF}, {"ob", COMPARE}, {"toby", PRINT},
-    {"to", BOOL_TRUE}, {"by", BOOL_FALSE}
+    {"+", OPERATOR},
+    {"-", OPERATOR},
+    {"t", IDENT},
+    {"o", IDENT},
+    {"b", IDENT},
+    {"y", IDENT},
+    {"toby", PRINT}
 };
 
-unordered_map<string, int> variables;
+unordered_map<string, float> variables;
 
-vector<Token> lexer(string line) {
+// Lexer
+vector<Token> Lexer(string line) {
     vector<Token> tokens;
     istringstream stream(line);
     string word;
     while (stream >> word) {
         if (keywords.count(word)) {
             tokens.push_back({keywords[word], word});
-        } else if (isdigit(word[0])) {
+        } 
+        else if (isdigit(word[0])) {
             tokens.push_back({NUMBER, word});
-        } else {
+        } 
+        else {
             cout << "Syntax Error: Unknown token " << word << endl;
         }
     }
@@ -48,44 +56,215 @@ vector<Token> lexer(string line) {
     return tokens;
 }
 
-void parser(const vector<Token>& tokens) {
-    if (tokens.empty()) return;
+// AST
+enum NodeType {
+    NODEPROG, 
+    NODENUM, 
+    NODEOP, 
+    NODEIDENT, 
+    NODEPRINT, 
+    NODEASSIGN 
+};
 
-    // Variable assignment working
-    if (tokens[0].type == VAR && tokens.size() >= 2 && tokens[1].type == NUMBER) {
-        variables[tokens[0].value] = stoi(tokens[1].value); 
+vector<string> NodeTypeString{
+    "Program","Number","Operator","Identifier","Print","Assignment"
+};
+
+class NodeStatement {
+public:
+    NodeType type;
+    virtual ~NodeStatement() {}  // Make base class polymorphic
+};
+
+class NodeProgram : public NodeStatement {
+public:
+    vector<NodeStatement*> nodes;
+    NodeProgram() { type = NODEPROG; }
+    ~NodeProgram() { for (auto node : nodes) delete node; } // Clean memory
+};
+
+class NodeExpression : public NodeStatement {};
+
+class NodeOperator : public NodeExpression {
+public:
+    NodeExpression* left;
+    NodeExpression* right;
+    string op;
+    NodeOperator(string OpInput, NodeExpression* LeftInput, NodeExpression* RightInput) {
+        type = NODEOP;
+        op = OpInput;
+        left = LeftInput;
+        right = RightInput;
+    }
+    ~NodeOperator() { delete left; delete right; }
+};
+
+class NodeIdentifier : public NodeExpression {
+public:
+    string symbol;
+    NodeIdentifier(string SymbolInput) {
+        type = NODEIDENT;
+        symbol = SymbolInput;
+    }
+};
+
+class NodeNumber : public NodeExpression {
+public:
+    float number;
+    NodeNumber(float NumberInput) {
+        type = NODENUM;
+        number = NumberInput;
+    }
+};
+
+class NodePrint : public NodeStatement {
+public:
+    NodeExpression* expr;
+    NodePrint(NodeExpression* ExprInput) {
+        type = NODEPRINT;
+        expr = ExprInput;
+    }
+    ~NodePrint() { delete expr; }
+};
+
+class NodeAssign : public NodeStatement {
+public:
+    string variable;
+    NodeExpression* expr;
+    NodeAssign(string VariableInput, NodeExpression* ExprInput) {
+        type = NODEASSIGN;
+        variable = VariableInput;
+        expr = ExprInput;
+    }
+    ~NodeAssign() { delete expr; }
+};
+
+// Parser
+class Parser {
+public:
+    vector<Token> tokens;
+    explicit Parser(const vector<Token>& TokenInput) : tokens(TokenInput) {}
+
+    bool NotEndOfFile() { return tokens[0].type != END; }
+    Token curr() { return tokens[0]; }
+    Token eat() { Token prev = curr(); tokens.erase(tokens.begin()); return prev; }
+
+    NodeProgram* ProduceAST() {
+        NodeProgram* program = new NodeProgram();
+        while (NotEndOfFile()) {
+            program->nodes.push_back(ParseStatement());
+        }
+        return program;
     }
 
-    // Greater than comparison statement semi working
-    else if (tokens[0].type == IF && tokens.size() >= 5 && tokens[1].type == VAR &&
-             tokens[2].type == COMPARE && tokens[3].type == VAR && tokens[4].type == PRINT) {
-        if (variables[tokens[1].value] > variables[tokens[3].value]) {
-            if (tokens[5].type == VAR) {
-                cout << variables[tokens[5].value] << endl;
-            } else if (tokens[5].type == BOOL_TRUE) {
-                cout << "true" << endl;
-            } else if (tokens[5].type == BOOL_FALSE) {
-                cout << "false" << endl;
-            }
+    NodeStatement* ParseStatement() {
+        if (curr().type == PRINT) {
+            eat();
+            return new NodePrint(ParseExpression());
         }
+        if (curr().type == IDENT) {
+            string varName = eat().value;
+            return new NodeAssign(varName, ParseExpression());
+        }
+        return ParseExpression();
     }
 
-    // Printing working
-    else if (tokens[0].type == PRINT && tokens.size() >= 2) {
-        if (tokens[1].type == VAR) {
-            cout << variables[tokens[1].value] << endl;
-        } else if (tokens[1].type == BOOL_TRUE) {
-            cout << "true" << endl;
-        } else if (tokens[1].type == BOOL_FALSE) {
-            cout << "false" << endl;
+    NodeExpression* ParseExpression() { return ParseAdditiveExpression(); }
+
+    NodeExpression* ParseAdditiveExpression() {
+        NodeExpression* left = ParsePrimaryExpression();
+        while (curr().value == "+" || curr().value == "-") {
+            string op = eat().value;
+            NodeExpression* right = ParsePrimaryExpression();
+            left = new NodeOperator(op, left, right);
         }
-    } 
+        return left;  // Return the last valid expression
+    }
     
-    else {
-        cout << "Syntax Error: Invalid statement" << endl;
+    NodeExpression* ParsePrimaryExpression() {
+        Token tk = curr();
+        if (tk.type == IDENT) return new NodeIdentifier(eat().value);
+        if (tk.type == NUMBER) return new NodeNumber(stof(eat().value));
+        
+        return new NodeNumber(0);  // Default to zero if unsupported expression encountered
     }
-}
+    
+};
 
+// Interpreter
+enum RunType { RUNNUM, VOID };
+
+class RuntimeType {
+public:
+    RunType type;
+    virtual ~RuntimeType() {}  // Make base class polymorphic
+};
+
+class RuntimeNumber : public RuntimeType {
+public:
+    float value;
+    explicit RuntimeNumber(float NumberInput) { type = RUNNUM; value = NumberInput; }
+};
+
+class RuntimeVoid : public RuntimeType {
+public:
+    RuntimeVoid() { type = VOID; }
+};
+
+class Interpreter {
+public:
+    RuntimeType* EvaluateProgram(NodeProgram* NodeInput) {
+        RuntimeType* lastEvaluated = new RuntimeVoid();
+        for (auto node : NodeInput->nodes) {
+            delete lastEvaluated;
+            lastEvaluated = Evaluate(node);
+        }
+        return lastEvaluated;
+    }
+
+    RuntimeType* EvaluateNumbers(RuntimeNumber* LeftIn, RuntimeNumber* RightIn, string OpIn) {
+        float result = (OpIn == "+") ? LeftIn->value + RightIn->value : LeftIn->value - RightIn->value;
+        return new RuntimeNumber(result);
+    }
+
+    RuntimeType* Evaluate(NodeStatement* StatementInput) {
+        switch (StatementInput->type) {
+            case NODENUM:
+                return new RuntimeNumber(static_cast<NodeNumber*>(StatementInput)->number);
+            case NODEOP: {
+                auto* opNode = static_cast<NodeOperator*>(StatementInput);
+                auto* left = Evaluate(opNode->left);
+                auto* right = Evaluate(opNode->right);
+                if (left->type == RUNNUM && right->type == RUNNUM) {
+                    return EvaluateNumbers(static_cast<RuntimeNumber*>(left), static_cast<RuntimeNumber*>(right), opNode->op);
+                }
+                return new RuntimeVoid();
+            }
+            case NODEIDENT: {
+                string var = static_cast<NodeIdentifier*>(StatementInput)->symbol;
+                if (variables.count(var)) return new RuntimeNumber(variables[var]);
+                cout << "Undefined variable: " << var << endl;
+                return new RuntimeVoid();
+            }
+            case NODEASSIGN: {
+                auto* assignNode = static_cast<NodeAssign*>(StatementInput);
+                auto* result = Evaluate(assignNode->expr);
+                if (result->type == RUNNUM) variables[assignNode->variable] = static_cast<RuntimeNumber*>(result)->value;
+                return new RuntimeVoid();
+            }
+            case NODEPRINT: {
+                auto* printNode = static_cast<NodePrint*>(StatementInput);
+                auto* result = Evaluate(printNode->expr);
+                if (result->type == RUNNUM) cout << static_cast<RuntimeNumber*>(result)->value << endl;
+                return new RuntimeVoid();
+            }
+            default:
+                return new RuntimeVoid();
+        }
+    }
+};
+
+// Main
 int main() {
     string input;
     cout << "TobyLang Interpreter. Type 'exit' to quit.\n";
@@ -93,19 +272,12 @@ int main() {
         cout << "> ";
         getline(cin, input);
         if (input == "exit") break;
-        if (input.find('.') != string::npos) {
-            // Assume it's a filename, open and process the file
-            ifstream file(input);
-            string line;
-            while (getline(file, line)) {
-                vector<Token> tokens = lexer(line);
-                parser(tokens);
-            }
-        } else {
-            // Treat the input as a direct command
-            vector<Token> tokens = lexer(input);
-            parser(tokens);
-        }
+        vector<Token> tokens = Lexer(input);
+        Parser parser(tokens);
+        NodeProgram* program = parser.ProduceAST();
+        Interpreter interpreter;
+        interpreter.EvaluateProgram(program);
+        delete program;
     }
     return 0;
 }
