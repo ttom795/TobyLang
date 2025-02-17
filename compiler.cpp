@@ -49,7 +49,7 @@ vector<Token> Lexer(string line) {
             tokens.push_back({NUMBER, word});
         } 
         else {
-            cout << "Syntax Error: Unknown token " << word << endl;
+            cout << "Syntax Error: Unknown token ->" << word << "<-" << endl;
         }
     }
     tokens.push_back({END, ""});
@@ -64,10 +64,6 @@ enum NodeType {
     NODEIDENT, 
     NODEPRINT, 
     NODEASSIGN 
-};
-
-vector<string> NodeTypeString{
-    "Program","Number","Operator","Identifier","Print","Assignment"
 };
 
 class NodeStatement {
@@ -143,13 +139,12 @@ public:
 class Parser {
 public:
     vector<Token> tokens;
-    explicit Parser(const vector<Token>& TokenInput) : tokens(TokenInput) {}
-
     bool NotEndOfFile() { return tokens[0].type != END; }
     Token curr() { return tokens[0]; }
     Token eat() { Token prev = curr(); tokens.erase(tokens.begin()); return prev; }
 
-    NodeProgram* ProduceAST() {
+    NodeProgram* ProduceAST(const vector<Token>& TokenInput) {
+        tokens = TokenInput;
         NodeProgram* program = new NodeProgram();
         while (NotEndOfFile()) {
             program->nodes.push_back(ParseStatement());
@@ -165,13 +160,11 @@ public:
     
         if (curr().type == IDENT) {
             string varName = eat().value;
-            
-            // If next token is a number, it's an assignment.
+
             if (curr().type == NUMBER || curr().type == IDENT){
                 return new NodeAssign(varName, ParseExpression());
             }
-    
-            // Otherwise, it's just a variable used in an expression, not an assignment.
+
             return ParseExpression();
         }
         
@@ -252,7 +245,7 @@ public:
             case NODEIDENT: {
                 string var = static_cast<NodeIdentifier*>(StatementInput)->symbol;
                 if (variables.count(var)) return new RuntimeNumber(variables[var]);
-                cout << "Undefined variable: " << var << endl;
+                cout << "Undefined variable ->" << var << "<-" << endl;
                 return new RuntimeVoid();
             }
             case NODEASSIGN: {
@@ -274,17 +267,38 @@ public:
 };
 
 // Main
-int main() {
+int main(int argc, char* argv[]) {
     string input;
+    Interpreter interpreter;
+    NodeProgram* program;
+    Parser parser;
+    
     cout << "TobyLang Interpreter. Type 'exit' to quit.\n";
+    
+    if (argc == 2) {
+        ifstream inputFile(argv[1]);
+
+        if (!inputFile) {
+            cout << "Error: Could not open file " << argv[1] << endl;
+            return 1;
+        }
+        cout << "TobyLang Interpreter. Processing file: " << argv[1] << endl;
+        while (getline(inputFile, input)) {
+            vector<Token> tokens = Lexer(input);
+            program = parser.ProduceAST(tokens);
+            interpreter.EvaluateProgram(program);
+            delete program;
+        }
+        
+        inputFile.close();
+    } 
+
     while (true) {
         cout << "> ";
         getline(cin, input);
         if (input == "exit") break;
         vector<Token> tokens = Lexer(input);
-        Parser parser(tokens);
-        NodeProgram* program = parser.ProduceAST();
-        Interpreter interpreter;
+        program = parser.ProduceAST(tokens);
         interpreter.EvaluateProgram(program);
         delete program;
     }

@@ -1,0 +1,7 @@
+t 5
+toby t
+o 1
+toby o
+toby t + o
+o t + o
+toby o
