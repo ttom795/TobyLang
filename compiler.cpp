@@ -73,14 +73,14 @@ vector<string> NodeTypeString{
 class NodeStatement {
 public:
     NodeType type;
-    virtual ~NodeStatement() {}  // Make base class polymorphic
+    virtual ~NodeStatement() {}
 };
 
 class NodeProgram : public NodeStatement {
 public:
     vector<NodeStatement*> nodes;
     NodeProgram() { type = NODEPROG; }
-    ~NodeProgram() { for (auto node : nodes) delete node; } // Clean memory
+    ~NodeProgram() { for (auto node : nodes) delete node; }
 };
 
 class NodeExpression : public NodeStatement {};
@@ -162,10 +162,19 @@ public:
             eat();
             return new NodePrint(ParseExpression());
         }
+    
         if (curr().type == IDENT) {
             string varName = eat().value;
-            return new NodeAssign(varName, ParseExpression());
+            
+            // If next token is a number, it's an assignment.
+            if (curr().type == NUMBER || curr().type == IDENT){
+                return new NodeAssign(varName, ParseExpression());
+            }
+    
+            // Otherwise, it's just a variable used in an expression, not an assignment.
+            return ParseExpression();
         }
+        
         return ParseExpression();
     }
 
@@ -178,7 +187,7 @@ public:
             NodeExpression* right = ParsePrimaryExpression();
             left = new NodeOperator(op, left, right);
         }
-        return left;  // Return the last valid expression
+        return left;
     }
     
     NodeExpression* ParsePrimaryExpression() {
@@ -186,7 +195,7 @@ public:
         if (tk.type == IDENT) return new NodeIdentifier(eat().value);
         if (tk.type == NUMBER) return new NodeNumber(stof(eat().value));
         
-        return new NodeNumber(0);  // Default to zero if unsupported expression encountered
+        return new NodeNumber(0);
     }
     
 };
@@ -197,7 +206,7 @@ enum RunType { RUNNUM, VOID };
 class RuntimeType {
 public:
     RunType type;
-    virtual ~RuntimeType() {}  // Make base class polymorphic
+    virtual ~RuntimeType() {}
 };
 
 class RuntimeNumber : public RuntimeType {
