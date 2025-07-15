@@ -1,12 +1,12 @@
 # TobyLang
 
-TobyLang is a simple, minimalist language that supports variable assignments, basic arithmetic, and print statements. 
+TobyLang is a minimalist esolang that supports variable assignments, basic arithmetic, and print statements. 
 
 This project was a test of my ability to implement parsing and evaluating expressions.
 
 ## Example Code
 
-An example file is included, but you can also type out commands line by line.
+An example file is included - simply drag and drop to run it - and you can also type out commands line by line.
 
 ### Assigning a Value
 
