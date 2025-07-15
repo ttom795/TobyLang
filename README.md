@@ -2,7 +2,7 @@
 
 TobyLang is a minimalist esolang that supports variable assignments, basic arithmetic, and print statements. 
 
-This project was a test of my ability to implement parsing and evaluating expressions.
+This project was a test of my ability to implement parsing and evaluating expressions. It features a lexer, parser, and interpreter, written from scratch by myself.
 
 ## Example Code
 
